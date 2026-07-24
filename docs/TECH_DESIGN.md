@@ -1,6 +1,6 @@
 # ねこ茶屋 技術設計書
 
-- バージョン: 0.1(テスト用初版)
+- バージョン: 0.2(設計レビュー反映版 — 曖昧箇所の明確化のみ。構成方針の変更なし)
 - 前提: 仕様は `GDD.md` を参照
 
 ## 1. 技術スタック
@@ -50,16 +50,20 @@ src/
 ├── game-core/
 │   ├── types.ts              # GameState, GeneratorState など
 │   ├── data/generators.ts    # 店員マスタ(GDD §4 の表をデータ化)
+│   ├── data/upgrades.ts      # タップ強化マスタ(GDD §6 の表をデータ化)
 │   ├── formulas.ts           # コスト・生産・猫玉の数式(全て純関数)
+│   ├── derived.ts            # recomputeDerived(state)(§5 参照)
 │   ├── advance.ts            # advance(state, dtSec): GameState
-│   ├── actions.ts            # buyGenerator, tap, prestige(純関数)
+│   ├── actions.ts            # buyGenerator, buyUpgrade, tap, prestige(純関数)
 │   ├── offline.ts            # applyOfflineProgress(state, now)
+│   ├── initial.ts            # createInitialState(now)
 │   └── save/
 │       ├── serialize.ts      # GameState ⇔ JSON(Decimal は文字列化)
 │       └── migrate.ts        # version 付きマイグレーション
 ├── store/
 │   ├── gameStore.ts          # zustand。state + アクションのラッパー
-│   └── persistence.ts        # localStorage 読み書き、autosave、visibilitychange
+│   ├── persistence.ts        # localStorage 読み書き、autosave、visibilitychange
+│   └── tabLock.ts            # アクティブタブロック(§8 参照)
 ├── loop/
 │   └── useGameLoop.ts        # rAF + 固定タイムステップで advance を回す
 ├── render/
@@ -69,12 +73,13 @@ src/
 └── ui/
     ├── Hud.tsx               # 所持小判・毎秒生産
     ├── GeneratorList.tsx     # 店員タブ(購入ボタン)
-    ├── PrestigePanel.tsx     # のれん分けタブ
+    ├── UpgradeList.tsx       # 強化タブ
+    ├── PrestigePanel.tsx     # のれん分けタブ(確認ダイアログ含む)
     ├── WelcomeBackModal.tsx  # オフライン収益受取
-    └── format.ts             # 万億兆表記フォーマッタ
+    └── format.ts             # 万億兆表記フォーマッタ(§12 参照)
 ```
 
-## 4. ゲームループ
+## 4. ゲームループと時刻の原則
 
 固定タイムステップ + アキュムレータ方式。描画は rAF 任せ、シミュレーションは 10 tick/秒。
 
@@ -90,47 +95,154 @@ function frame(now: number) {
 ```
 
 - `advance` は `GameState` を受け取り新しい状態を返す純関数。副作用なし
-- 長時間の非アクティブ(タブ復帰・起動時)は tick を回さず `applyOfflineProgress` で
-  一括計算する(経過時間 × 生産/秒 × 0.5、上限8時間)。ループで追いつかせない
 
-## 5. 状態と描画の同期
+**時刻の使い分け(原則)**: セッション内の dt 計測は `performance.now` のみ、
+セーブ(`savedAt`)とオフライン計算は `Date.now`(epoch ms)のみを使う。混用しない。
 
-- Pixi 側はストアを `subscribe` し、差分だけシーンに反映する
-  (例: 店員数が変わったらスプライトを追加、小判残高は Pixi では扱わない)
-- タップは Pixi のヒット判定 → ストアの `tap()` アクションを呼ぶ。演出はその場で再生
-- React UI は通常の zustand セレクタで購読。毎 tick 変わる数値(所持小判)は
-  HUD コンポーネントに閉じ込め、再レンダリング範囲を最小化する
+**非アクティブからの復帰**(visibilitychange の visible 時、および起動時)は tick で
+追いつかせず、hidden からの経過時間で分岐する:
 
-## 6. セーブデータ
+- 経過 **60秒未満**: 効率100%で経過分を一括加算(`advance` 相当の一括計算)。モーダルなし
+- 経過 **60秒以上**: `applyOfflineProgress`(`min(elapsed, 8h) × 生産/秒 × 0.5`、
+  クランプが先)。獲得1小判以上ならモーダル表示
+- `savedAt > now`(時計巻き戻し)は `elapsed = max(0, now − savedAt)` により収益0とし、
+  直ちに `savedAt = now` で上書き保存する
+
+## 5. 派生値キャッシュ(純関数方針との両立)
+
+生産/秒を毎 tick 全店員分 Decimal で畳み込むのは無駄なので、派生値は GameState 内に
+非永続フィールドとして持つ。
+
+```ts
+interface GameState {
+  ...
+  derived: { prodPerSec: Decimal; tapGain: Decimal };  // 保存対象外
+}
+```
+
+- `recomputeDerived(state): GameState` を game-core に置き、呼び出し箇所を
+  **buy / buyUpgrade / prestige / ロード直後 / migrate 後** に限定する
+- `advance` と `tap` は `derived` を読むだけで再計算しない
+- `serialize` は `derived` を除外し、`deserialize` 後に必ず `recomputeDerived` を通す
+
+## 6. 状態と描画の同期
+
+- `advance` は **構造共有** を徹底する: 変化したフィールドだけ差し替え、`generators` 配列など
+  変化のない部分は参照を維持する(毎 tick の全再生成による GC 負荷と無駄な再レンダリングを防ぐ)
+- React UI は zustand セレクタでプリミティブ or Decimal 単体を購読し、Decimal には
+  `(a, b) => a.eq(b)` のカスタム equality を渡す。毎 tick 変わる数値(所持小判)は
+  HUD コンポーネントに閉じ込める
+- Pixi 側は `subscribeWithSelector` で各店員の `owned` のみ購読し、差分だけシーンに反映する
+  (小判残高は Pixi では扱わない)
+- **ストアの全アクションは `set(prev => …)` の関数型アップデータのみ使用する**。
+  zustand は同期実行のため、これで Pixi イベントハンドラ発の `tap()` と tick の排他が成立する
+  (古い state のキャプチャによる更新消失を防ぐ)
+
+## 7. 入力(タップ)
+
+- タップ対象スプライトは `eventMode: 'static'` + 明示的な `hitArea` を設定
+  (Pixi v8 のデフォルトはヒットしない)
+- React オーバーレイは背景を `pointer-events: none`、ボタン類のみ `auto` にして
+  キャンバスのタップを妨げない
+- canvas に `touch-action: none`、ページ全体に `touch-action: manipulation`
+  (ダブルタップズーム・300ms遅延対策)
+- タップ収入の付与は `pointerdown` 単位で最大15回/秒(GDD §5)。超過は演出のみ
+
+## 8. マルチタブ対策(アクティブタブロック)
+
+同一セーブを複数タブで開くと二重シミュレーションと autosave の上書き合戦が起きるため、
+`tabLock.ts` で単一アクティブタブを保証する。
+
+- localStorage にタブID+ハートビート時刻を書く(2秒間隔、5秒でタイムアウト)
+- ロックを持つタブだけがゲームループと保存を実行。非リーダータブは
+  「別のタブでプレイ中です」オーバーレイを表示して停止する
+- 保存時は既存セーブの `savedAt` と比較し、自分より新しいセーブは上書きしない
+  (`storage` イベントで検知)
+
+## 9. セーブデータ
 
 ```ts
 interface SaveData {
   version: 1;
   savedAt: number;              // epoch ms — オフライン計算の基準
   koban: string;                // Decimal を文字列化
-  lifetimeKoban: string;
-  nekodama: number;
+  lifetimeKoban: string;        // 全期間累計。転生を跨いで保持(猫玉式の入力)
+  nekodama: string;             // Decimal(number だと lifetime ≈ 1e616 超で溢れる)
   generators: { id: string; owned: number }[];
+  upgrades: string[];           // 購入済みタップ強化ID。転生で空になる
+  prestigeCount: number;        // 統計(GDD §12)
+  totalTaps: number;
+  startedAt: number;            // epoch ms
 }
 ```
 
-- 書き込み: 10秒間隔の autosave + `visibilitychange`(hidden 時)
-- 読み込み: 起動時に `migrate()` → `applyOfflineProgress()` → ストア初期化
-- マイグレーションは `version` の switch 文で段階適用。不正データは初期状態にフォールバック
+- マイルストーン倍率は `owned` からの純導出であり **保存しない**(GDD §4)
+- `globalMult`・`tapMult` も保存せず、猫玉と upgrades から毎回導出する
 
-## 7. テスト方針
+### シリアライズ仕様
+
+- Decimal は `Decimal.prototype.toString()` で文字列化、`new Decimal(str)` で復元。
+  ラウンドトリップは vitest で保証する
+- デシリアライズ後に NaN / Infinity / 負数を検証し、不正値は **フィールド単位で** 初期値に
+  フォールバックする(セーブ全体は捨てない)
+
+### 読み書きフロー
+
+- 書き込み: 10秒間隔の autosave + `visibilitychange`(hidden 時)。§8 のロック保持タブのみ
+- 読み込み(起動時):
+  1. セーブなし → `createInitialState(Date.now())` で開始。オフライン計算はスキップ
+  2. セーブあり → `migrate()` → `deserialize()` → `recomputeDerived()` →
+     `applyOfflineProgress()` → ストア初期化
+- 破損時(JSON.parse 失敗など): 元の文字列を別キー(`save_backup_corrupt`)に退避してから
+  初期化し、起動時モーダルで通知する
+- `version` が既知より新しい場合(将来版からのロールバック)も破損と同扱い
+- parse は通るがフィールド欠落の場合はデフォルト値で補完して正常続行
+- マイグレーションは `version` の switch 文で段階適用
+
+## 10. Pixi と React のライフサイクル
+
+Pixi v8 の `app.init()` は async のため、React StrictMode の二重マウントと競合しやすい。
+`PixiStage` は以下の手順を厳守する:
+
+- effect 内で `cancelled` フラグと init Promise を保持。init 完了時に `cancelled` なら即 destroy
+- cleanup は `initPromise.then(app => app.destroy(true))` で **必ず init 完了を待ってから** 破棄
+  (WebGL コンテキストリーク防止)
+- Application インスタンスは ref で管理し再入を防ぐ
+
+## 11. レイアウト・解像度
+
+- `app.init({ resolution: Math.min(devicePixelRatio, 2), autoDensity: true, resizeTo: 親要素 })`
+- ページは `100dvh` の flex 縦3段(HUD / canvas flex-1 / タブ)= GDD §9 の 10% / 50% / 40%
+- HUD に `env(safe-area-inset-top)`、タブ領域に `env(safe-area-inset-bottom)` のパディング
+- シーンは resize イベントで論理座標を再レイアウト(画面回転・アドレスバー伸縮に追従)
+
+## 12. 数値フォーマッタ(format.ts)
+
+- 万〜無量大数(1e4〜1e68、4桁刻み)の単位表を定義。範囲内は「有効3桁+単位」
+  (例: `1.23万`、`12.3億`)。1e72 以上は `1.23e75` の指数表記にフォールバック
+- 丸め: 残高・生産は切り捨て、コストは切り上げ(GDD §10)
+- 実装は Decimal の `exponent` / `mantissa` を直接使い、`toNumber()` を経由しない
+  (1e308 超で破綻するため)
+
+## 13. テスト方針
 
 game-core のみを vitest で単体テストする(描画・UI はテスト版では目視確認)。
 
-- formulas: コスト成長、マイルストーン倍率、猫玉計算の境界値
-- offline: 8時間クランプ、50%係数、savedAt が未来(時計改ざん)のとき 0 扱い
-- save: serialize → deserialize のラウンドトリップ、旧バージョンからの migrate
+- formulas: コスト成長、マイルストーン倍率(10/25/50/100 境界)、猫玉計算
+  (獲得0クランプ、所持数との差分)の境界値
+- offline: 8時間クランプが50%係数より先であること、60秒閾値の前後、
+  savedAt が未来のとき収益0+savedAt上書き
+- save: serialize → deserialize のラウンドトリップ、旧バージョンからの migrate、
+  フィールド欠落時の補完、破損時のフォールバック
+- format: 9999→1万の境界、単位境界、1e68〜1e72 の切替、切り捨て/切り上げの方向
 
-## 8. 主要リスクと対策
+## 14. 主要リスクと対策
 
 | リスク | 対策 |
 |--------|------|
-| Decimal 演算を毎 tick 全店員分行う負荷 | 生産/秒の合計をキャッシュし、購入・強化時のみ再計算 |
-| Pixi と React のライフサイクル競合 | PixiStage が単独で Application を所有し、unmount で確実に destroy |
-| モバイルの省電力で rAF が止まる | 止まって良い設計(復帰時にオフライン計算が吸収する) |
-| localStorage 容量・破損 | セーブは数KB。parse 失敗時は初期化+ユーザーに通知 |
+| Decimal 演算を毎 tick 全店員分行う負荷 | 派生値キャッシュ(§5)。購入・強化・転生・ロード時のみ再計算 |
+| 毎 tick の状態再生成による GC・再レンダリング | 構造共有+セレクタ購読+Decimal カスタム equality(§6) |
+| Pixi と React のライフサイクル競合 | init Promise を待ってから destroy(§10) |
+| マルチタブの二重実行・セーブ競合 | アクティブタブロック(§8) |
+| モバイルの省電力で rAF が止まる | 止まって良い設計(復帰時に §4 の一括計算が吸収する) |
+| localStorage 容量・破損 | セーブは数KB。破損時は退避+初期化+通知(§9) |
