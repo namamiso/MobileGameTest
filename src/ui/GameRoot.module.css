@@ -1,0 +1,296 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 100dvh 非対応環境のフォールバック */
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--background);
+  overflow: hidden;
+}
+
+/* ── HUD ────────────────────────────────
+   高さは内容駆動(min 10%)。safe-area の inset は
+   ここで吸収せず flex-1 の stage 側に押し付ける(TECH §11) */
+.hud {
+  flex: 0 0 auto;
+  min-height: 10%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  padding-top: calc(8px + env(safe-area-inset-top));
+  background: #5c4033;
+  color: #f7f1e3;
+}
+
+.hudKoban {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hudSub {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.settingsButton {
+  font-size: 1.2rem;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* ── 茶屋シーン領域(flex-1。セーフエリアのしわ寄せ先) ── */
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: linear-gradient(#bfe3f0 0 55%, #e8d8b8 55% 100%);
+  overflow: hidden;
+}
+
+.tapArea {
+  position: absolute;
+  /* 下端 20px は不感帯 — タブバー誤爆防止(議事録005) */
+  inset: 0 0 20px 0;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  color: #5c4033;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.tapCat {
+  font-size: 4rem;
+  display: block;
+  transition: transform 0.06s;
+}
+
+.tapArea:active .tapCat {
+  transform: scale(0.9);
+}
+
+.tapFloat {
+  position: absolute;
+  pointer-events: none;
+  font-weight: 700;
+  color: #b8860b;
+  animation: floatUp 0.7s ease-out forwards;
+}
+
+@keyframes floatUp {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-48px); }
+}
+
+/* ── タブ領域 (40%) ──────────────────────── */
+.tabs {
+  flex: 0 0 40%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fffaf0;
+  border-top: 2px solid #5c4033;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tabBar {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.tabButton {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 0;
+  font-size: 0.95rem;
+  border: none;
+  background: #e8d8b8;
+  color: #5c4033;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabButtonActive {
+  composes: tabButton;
+  background: #fffaf0;
+  font-weight: 700;
+  border-bottom-color: #b8860b;
+}
+
+.tabBody {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+/* ── リスト行 ─────────────────────────── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid #e0d0b0;
+}
+
+.rowInfo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rowName {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.rowSub {
+  font-size: 0.75rem;
+  color: #8a7355;
+}
+
+.buyButton {
+  flex: 0 0 auto;
+  min-width: 104px;
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 8px;
+  background: #b8860b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.buyButton:disabled {
+  /* 不足時もコストが読める濃色文字(GDD §4「コストは常時表示」) */
+  background: #e8dcc4;
+  color: #8a7355;
+  cursor: default;
+}
+
+.locked {
+  opacity: 0.55;
+}
+
+/* ── のれん分け ───────────────────────── */
+.prestigeBox {
+  padding: 12px 4px;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.prestigeButton {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  background: #8b2635;
+  color: #fff;
+  cursor: pointer;
+}
+
+.prestigeButton:disabled {
+  background: #c9bda5;
+  cursor: default;
+}
+
+/* ── モーダル ─────────────────────────── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 24px;
+}
+
+.modal {
+  background: #fffaf0;
+  color: #3d2f23;
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 360px;
+  width: 100%;
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.modalTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modalPrimary {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.modalDanger {
+  composes: modalPrimary;
+  background: #8b2635;
+}
+
+.modalSecondary {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #c9bda5;
+  border-radius: 8px;
+  background: transparent;
+  color: #5c4033;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* 危険操作の控えめな導線(設定のリセット等) */
+.dangerLink {
+  background: none;
+  border: none;
+  color: #8b2635;
+  text-decoration: underline;
+  padding: 8px;
+  min-height: 44px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ── 全画面メッセージ ──────────────────── */
+.centerNote {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}

@@ -1,6 +1,7 @@
 import type Decimal from 'break_infinity.js';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import {
   buyGenerator as buyGeneratorAction,
   buyUpgrade as buyUpgradeAction,
@@ -86,7 +87,13 @@ export const useGameStore = create<GameStore>()(
 
     tap: (nowMs) => {
       tapStamps = tapStamps.filter((t) => t > nowMs - 1000);
-      if (tapStamps.length >= TAP_RATE_LIMIT_PER_SEC) return false;
+      if (tapStamps.length >= TAP_RATE_LIMIT_PER_SEC) {
+        // 収入は0だが統計の総タップ回数には数える(GDD §12)
+        set((prev) => ({
+          state: { ...prev.state, totalTaps: prev.state.totalTaps + 1 },
+        }));
+        return false;
+      }
       tapStamps.push(nowMs);
       set((prev) => ({ state: tapAction(prev.state) }));
       return true;
@@ -119,3 +126,21 @@ export const useGameStore = create<GameStore>()(
     };
   }),
 );
+
+/** Decimal 用カスタム equality(TECH_DESIGN §6)。毎 tick の無駄な再レンダリングを防ぐ */
+export const decimalEq = (a: Decimal, b: Decimal): boolean => a.eq(b);
+
+/**
+ * 表示用プリミティブだけを詰めたオブジェクト/配列向けの equality。
+ * セレクタで「表示に効く値」へ落としてから比較することで、
+ * 毎 tick の state 差し替えでも表示が変わらない限り再レンダリングしない。
+ */
+export const jsonEq = <T,>(a: T, b: T): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** equality 付きセレクタフック(Decimal を select するコンポーネント用) */
+export function useGameValue<T>(
+  selector: (s: GameStore) => T,
+  equality?: (a: T, b: T) => boolean,
+): T {
+  return useStoreWithEqualityFn(useGameStore, selector, equality);
+}

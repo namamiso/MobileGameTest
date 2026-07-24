@@ -242,8 +242,11 @@ Pixi v8 の `app.init()` は async のため、React StrictMode の二重マウ�
 ## 11. レイアウト・解像度
 
 - `app.init({ resolution: Math.min(devicePixelRatio, 2), autoDensity: true, resizeTo: 親要素 })`
-- ページは `100dvh` の flex 縦3段(HUD / canvas flex-1 / タブ)= GDD §9 の 10% / 50% / 40%
-- HUD に `env(safe-area-inset-top)`、タブ領域に `env(safe-area-inset-bottom)` のパディング
+- ページは `100dvh` の flex 縦3段(HUD / canvas flex-1 / タブ)≒ GDD §9 の 10% / 50% / 40%。
+  HUD は内容駆動の高さ(min 10%)、タブは 40% 固定、canvas が flex-1 で
+  セーフエリア分のしわ寄せを吸収する
+- HUD に `env(safe-area-inset-top)`、タブ領域に `env(safe-area-inset-bottom)` のパディング。
+  `100dvh` の直前に `100vh` フォールバックを置く
 - シーンは resize イベントで論理座標を再レイアウト(画面回転・アドレスバー伸縮に追従)
 - viewport 方針: `maximumScale: 1` + `userScalable: false` + `viewportFit: 'cover'` で
   ピンチズームを無効化する(ゲーム画面として固定。`touch-action` 対策 §7 と併用)
