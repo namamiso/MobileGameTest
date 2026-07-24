@@ -15,6 +15,19 @@ const MAX_ACC_SEC = 1;
 const SUSPEND_GAP_SEC = 5;
 
 /**
+ * バランス確認用の時間加速(開発ビルド限定。IMPLEMENTATION_PLAN フェーズ6)。
+ * `?timescale=100` のように指定するとシミュレーションだけが加速される
+ * (壁時計基準のオフライン精算・保存透かしには影響しない)。
+ */
+function devTimeScale(): number {
+  if (process.env.NODE_ENV !== 'development') return 1;
+  const raw = new URLSearchParams(window.location.search).get('timescale');
+  if (raw === null) return 1;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.min(Math.max(n, 1), 1000) : 1;
+}
+
+/**
  * rAF + 固定タイムステップのゲームループ(TECH_DESIGN §4)。
  * enabled=false(未ロード・非リーダータブ)の間は回さない。
  * タブ復帰時は accumulator を捨てる — 非表示中の時間は
@@ -28,6 +41,7 @@ export function useGameLoop(enabled: boolean): void {
     let last = performance.now();
     let lastWall = Date.now();
     let acc = 0;
+    const timeScale = devTimeScale();
 
     const frame = (now: number) => {
       const wallNow = Date.now();
@@ -40,7 +54,7 @@ export function useGameLoop(enabled: boolean): void {
         acc += (now - last) / 1000;
         acc = Math.min(acc, MAX_ACC_SEC);
         while (acc >= TICK_SEC) {
-          useGameStore.getState().advanceBy(TICK_SEC);
+          useGameStore.getState().advanceBy(TICK_SEC * timeScale);
           acc -= TICK_SEC;
         }
       }

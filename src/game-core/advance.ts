@@ -8,6 +8,8 @@ import type { GameState } from './types';
  * 契約: dtSec は tick 級(1秒以下)を前提とする。長時間の経過を
  * ここに流すとオフライン規則(効率50%・8時間上限)を素通りするため、
  * 復帰処理は必ず applyOfflineProgress(offline.ts)を使うこと。
+ * 例外: dev 限定の ?timescale= 加速はオフライン規則の素通りが目的どおりであり、
+ * advance は dt に線形なので大きい dt でも安全。
  */
 export function advance(state: GameState, dtSec: number): GameState {
   if (!Number.isFinite(dtSec) || dtSec <= 0) return state;
