@@ -74,7 +74,9 @@ React・Pixi・localStorage に一切触れない。TDD で進める価値が最
 
 **成果物**
 - `store/gameStore.ts`: zustand。全アクション `set(prev => …)` 関数型アップデータ、
-  Decimal カスタム equality、subscribeWithSelector 導入
+  subscribeWithSelector 導入(Decimal カスタム equality はフェーズ4の HUD 実装時)
+- `store/session.ts`: 配線ロジック本体(起動・ハートビート・可視性・サスペンド精算)。
+  storage と時刻を注入して vitest で直接検証する
 - `loop/useGameLoop.ts`: rAF + 固定タイムステップ(TICK 0.1s、acc クランプ 1s)
 - `store/persistence.ts`: 起動フロー(セーブなし→initial / あり→migrate→deserialize→
   recomputeDerived→offline)、autosave 10s、visibilitychange 保存+復帰分岐(60秒閾値)
@@ -82,10 +84,10 @@ React・Pixi・localStorage に一切触れない。TDD で進める価値が最
   新しい savedAt を上書きしない保存ガード
 - デバッグページ: 所持小判・生産/秒の表示、tap / buy ×8 / prestige の素ボタン
 
-**完了条件(手動確認)**
-- 放置で小判が増える。購入で生産が上がる。リロードで復元される
-- タブを閉じて再度開くとオフライン収益が計算される(60秒未満/以上の分岐)
-- 2タブ目を開くと片方が「別のタブでプレイ中」で止まる
+**完了条件**
+- session ロジックの単体テスト(起動・昇格・精算・保存ガード・透かし)が全グリーン
+- ブラウザでの手動確認項目は「保留中の実ブラウザ確認」(後述)へ繰り延べ
+  (この実行環境にブラウザがないため。議事録004)
 
 ## フェーズ 4: React UI 一式
 
@@ -120,6 +122,18 @@ format テストがグリーン
 アンマウント/再マウント(StrictMode)でエラー・リークなし
 
 ## フェーズ 6: モバイル対応仕上げ・QA
+
+**前提: 実ブラウザ環境の用意(要ユーザー操作)**
+実装環境にはブラウザがなく(Playwright chromium は libatk 等の不足で起動不可・sudo 権限なし)、
+フェーズ3〜5のブラウザ確認は下の保留リストに繰り延べている。フェーズ6の冒頭で
+`sudo npx playwright install-deps chromium` の実行をユーザーに依頼すること(playwright 本体は導入済み)。
+
+**保留中の実ブラウザ確認チェックリスト**
+- [ ] 放置で小判が増える。購入で生産が上がる。リロードで復元される(フェーズ3)
+- [ ] タブ切替・非表示→復帰でオフライン精算が走る(60秒未満/以上の分岐)(フェーズ3)
+- [ ] 2タブ目を開くと片方が「別のタブでプレイ中」で止まり、リーダー閉鎖で引き継ぐ(フェーズ3)
+- [ ] StrictMode 二重マウントでリーク・二重初期化なし(フェーズ3)
+- [ ] Pixi キャンバスの描画・タップ・リサイズ・destroy(フェーズ5)
 
 **作業**
 - 実機 or DevTools モバイルエミュレーションで: セーフエリア、画面回転・アドレスバー伸縮、
