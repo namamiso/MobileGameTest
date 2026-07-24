@@ -106,8 +106,9 @@ function frame(now: number) {
 - 経過 **60秒未満**: 効率100%で経過分を一括加算(`advance` 相当の一括計算)。モーダルなし
 - 経過 **60秒以上**: `applyOfflineProgress`(`min(elapsed, 8h) × 生産/秒 × 0.5`、
   クランプが先)。獲得1小判以上ならモーダル表示
-- `savedAt > now`(時計巻き戻し)は `elapsed = max(0, now − savedAt)` により収益0とし、
-  直ちに `savedAt = now` で上書き保存する
+- `savedAt > now`(時計巻き戻し)は `elapsed = max(0, now − savedAt)` により収益0。
+  `savedAt` は `max(savedAt, now)` で単調非減少を保ち(巻き戻さない)、
+  時計往復による反復取得を防ぐ。保存時(persistence)も同じ max 規則を適用する
 
 ## 5. 派生値キャッシュ(純関数方針との両立)
 
@@ -182,10 +183,16 @@ interface SaveData {
 
 ### シリアライズ仕様
 
+- `serialize(state, now)` は保存時刻を引数に取り、`savedAt = max(state.savedAt, now)` を
+  スタンプする(単調非減少規則を保存経路でも維持)
 - Decimal は `Decimal.prototype.toString()` で文字列化、`new Decimal(str)` で復元。
   ラウンドトリップは vitest で保証する
-- デシリアライズ後に NaN / Infinity / 負数を検証し、不正値は **フィールド単位で** 初期値に
+- デシリアライズ時は構築**前**に文字列形式を検証する(break_infinity は 'Infinity' を
+  有限ペアとして受理し、'1e9e9' を黙って誤パースするため)。構築後にも
+  NaN / 指数上限(9e15)/ 負数を検証し、不正値は **フィールド単位で** 初期値に
   フォールバックする(セーブ全体は捨てない)
+- `version` フィールドの欠落・非整数・未知の新バージョンは **破損扱い**
+  (フィールド補完の対象外。判別子が無いデータは安全に補完できない)
 
 ### 読み書きフロー
 
