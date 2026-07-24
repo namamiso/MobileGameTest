@@ -232,12 +232,25 @@ interface SaveData {
 ## 10. Pixi と React のライフサイクル
 
 Pixi v8 の `app.init()` は async のため、React StrictMode の二重マウントと競合しやすい。
-`PixiStage` は以下の手順を厳守する:
+`PixiStage` は以下の手順を厳守する(Codex 相互検証で確定。議事録006):
 
+- **`app.init()` は `Promise<void>`**(Application を返さない)。app は effect ローカルの
+  クロージャで保持する。ref を再入ロックに使うと StrictMode 再実行時に空画面になるため不可
 - effect 内で `cancelled` フラグと init Promise を保持。init 完了時に `cancelled` なら即 destroy
-- cleanup は `initPromise.then(app => app.destroy(true))` で **必ず init 完了を待ってから** 破棄
-  (WebGL コンテキストリーク防止)
-- Application インスタンスは ref で管理し再入を防ぐ
+- cleanup は `initPromise.then(destroy, destroy)` で **必ず init 完了(または失敗)を
+  待ってから** 破棄する
+- **init 失敗時は renderer 未生成のため `app.destroy()` を呼ばない**
+  (`renderer.destroy` で落ちる)。`app.stage.destroy({ children: true })` のみ行う
+- destroy オプションは `({ removeView: true }, { children: true })`。
+  `texture/textureSource` の破棄は共有テクスチャを壊すため指定しない
+- **`resizeTo: HTMLElement` は window.resize しか監視しない**(ResizeObserver ではない)。
+  flex 子のサイズ変化(HUD 高さ変動等)には host への ResizeObserver で
+  `renderer.resize(w, h)` を呼んで追従する(同一サイズは除外)
+- シーンの再レイアウトは `renderer.on('resize', …)` にフックし、
+  座標は `app.screen.width/height`(論理ピクセル)を使う。hitArea もここで更新する。
+  hitArea はほぼ全面だが、下端 20px はタブバー誤爆防止の不感帯として除外(議事録005)
+- 演出(フロート・パーティクル・揺れ)は `app.ticker`。callback は同一参照で
+  必ず remove し、シーン destroy で ticker・Pixi イベント・zustand 購読を全解除する
 
 ## 11. レイアウト・解像度
 

@@ -56,42 +56,16 @@
   overflow: hidden;
 }
 
-.tapArea {
+/* 視覚的に隠すがフォーカス可能(キーボード・SR 向け代替操作) */
+.srOnly {
   position: absolute;
-  /* 下端 20px は不感帯 — タブバー誤爆防止(議事録005) */
-  inset: 0 0 20px 0;
-  width: 100%;
-  border: none;
-  background: transparent;
-  font-size: 1.1rem;
-  color: #5c4033;
-  cursor: pointer;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-
-.tapCat {
-  font-size: 4rem;
-  display: block;
-  transition: transform 0.06s;
-}
-
-.tapArea:active .tapCat {
-  transform: scale(0.9);
-}
-
-.tapFloat {
-  position: absolute;
-  pointer-events: none;
-  font-weight: 700;
-  color: #b8860b;
-  animation: floatUp 0.7s ease-out forwards;
-}
-
-@keyframes floatUp {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-48px); }
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
 }
 
 /* ── タブ領域 (40%) ──────────────────────── */

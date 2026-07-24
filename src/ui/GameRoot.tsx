@@ -15,12 +15,12 @@ import {
 import { SAVE_KEY } from '@/store/persistence';
 import { HEARTBEAT_MS, LOCK_KEY } from '@/store/tabLock';
 import styles from './GameRoot.module.css';
+import { PixiStage } from '@/render/PixiStage';
 import { GeneratorList } from './GeneratorList';
 import { Hud } from './Hud';
 import { Modal } from './Modal';
 import { PrestigePanel } from './PrestigePanel';
 import { SettingsModal } from './SettingsModal';
-import { TapArea } from './TapArea';
 import { UpgradeList } from './UpgradeList';
 import { WelcomeBackModal } from './WelcomeBackModal';
 
@@ -110,7 +110,7 @@ export default function GameRoot() {
   return (
     <div className={styles.root}>
       <Hud onOpenSettings={() => setSettingsOpen(true)} />
-      <TapArea />
+      <PixiStage />
       <nav className={styles.tabs}>
         <div className={styles.tabBar} role="tablist">
           {TABS.map((t) => (
