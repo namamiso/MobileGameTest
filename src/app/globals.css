@@ -1,0 +1,25 @@
+:root {
+  --background: #f7f1e3;
+  --foreground: #3d2f23;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation; /* ダブルタップズーム抑止 (TECH_DESIGN §7) */
+  overscroll-behavior: none;
+  user-select: none;
+}

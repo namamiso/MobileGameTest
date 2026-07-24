@@ -198,5 +198,6 @@ format テストがグリーン
 
 - 仕様の解釈に迷ったら実装で勝手に決めず、GDD/TECH_DESIGN を修正してからコードに反映
   (ドキュメントが常に正)
-- 各フェーズ完了時に `npm test` と `npm run build` を通し、フェーズ完了レビューを経てからコミット
+- 各フェーズ完了時に `npm test` / `npm run typecheck` / `npm run build` を通し、
+  フェーズ完了レビューを経てからコミット
 - game-core に React/Pixi/DOM への import が入ったらレビューで弾く(レイヤー違反)

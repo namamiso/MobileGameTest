@@ -71,6 +71,7 @@ src/
 │   ├── scene/TeaHouseScene.ts# 背景・ねこ配置・タップ判定
 │   └── scene/CoinEmitter.ts  # 小判が跳ねるパーティクル
 └── ui/
+    ├── GameRoot.tsx          # エントリ。ストア初期化・ループ起動と各パネルの合成
     ├── Hud.tsx               # 所持小判・毎秒生産
     ├── GeneratorList.tsx     # 店員タブ(購入ボタン)
     ├── UpgradeList.tsx       # 強化タブ
@@ -215,6 +216,8 @@ Pixi v8 の `app.init()` は async のため、React StrictMode の二重マウ�
 - ページは `100dvh` の flex 縦3段(HUD / canvas flex-1 / タブ)= GDD §9 の 10% / 50% / 40%
 - HUD に `env(safe-area-inset-top)`、タブ領域に `env(safe-area-inset-bottom)` のパディング
 - シーンは resize イベントで論理座標を再レイアウト(画面回転・アドレスバー伸縮に追従)
+- viewport 方針: `maximumScale: 1` + `userScalable: false` + `viewportFit: 'cover'` で
+  ピンチズームを無効化する(ゲーム画面として固定。`touch-action` 対策 §7 と併用)
 
 ## 12. 数値フォーマッタ(format.ts)
 
